@@ -7,7 +7,8 @@ getgenv().bgsInfConfig = {
     AUTO_BUBBLE = true, -- Auto-blow bubbles
     CHESTS_OPEN = {"Royal Chest", "Dice Chest", "Golden Chest"}, -- Chests to open
     EGG_HATCH = {"Cyber Egg", "Underworld Egg", "Rainbow Egg"}, -- Eggs to hatch (first in list prioritized)
-    EGG_HATCH_AMOUNT = 6 -- Number of eggs to hatch per action
+    EGG_HATCH_AMOUNT = 6, -- Number of eggs to hatch per action
+    LUCK_RIFT = {"X5", "X10", "X25"} -- Luck levels to target (e.g., only "X25" for highest luck)
 }
 
 -- Services
@@ -41,6 +42,17 @@ local function getRiftTimer(riftPath)
         return minutes
     end
     return 0
+end
+
+local function getRiftLuck(riftPath)
+    local success, timerGui = pcall(function()
+        return Workspace.Rendered.Rifts[riftPath].Display.SurfaceGui.Timer
+    end)
+    if success and timerGui then
+        local luckText = timerGui.Text:match("X(%d+)") or "X0" -- Extract "X5", "X10", "X25" or default to "X0"
+        return "X" .. luckText
+    end
+    return "X0"
 end
 
 local function flyToRift(riftPath)
@@ -87,11 +99,17 @@ local function scanRifts()
 end
 
 local function findTargetRift(activeRifts)
+    local luckOptions = getgenv().bgsInfConfig.LUCK_RIFT
     -- Prioritize eggs first based on EGG_HATCH config order
     for _, egg in ipairs(getgenv().bgsInfConfig.EGG_HATCH) do
         for _, rift in ipairs(activeRifts) do
             if rift.name == egg and rift.type == "egg" then
-                return rift
+                local luck = getRiftLuck(rift.path)
+                for _, luckLevel in ipairs(luckOptions) do
+                    if luck == luckLevel then
+                        return rift
+                    end
+                end
             end
         end
     end
@@ -99,7 +117,12 @@ local function findTargetRift(activeRifts)
     for _, chest in ipairs(getgenv().bgsInfConfig.CHESTS_OPEN) do
         for _, rift in ipairs(activeRifts) do
             if rift.name == chest and rift.type == "chest" then
-                return rift
+                local luck = getRiftLuck(rift.path)
+                for _, luckLevel in ipairs(luckOptions) do
+                    if luck == luckLevel then
+                        return rift
+                    end
+                end
             end
         end
     end
@@ -117,7 +140,7 @@ local function mainLoop()
         -- Scan for active rifts
         local activeRifts = scanRifts()
         if #activeRifts > 0 then
-            -- Find target rift based on priority
+            -- Find target rift based on priority and luck
             local targetRift = findTargetRift(activeRifts)
             if targetRift then
                 -- Fly to rift
