@@ -1,26 +1,27 @@
--- Replace with your GitHub raw URL for config.lua
+-- Load config
 local CONFIG_URL = "https://raw.githubusercontent.com/YourUsername/YourRepo/main/config.lua"
 loadstring(game:HttpGet(CONFIG_URL))()
 
 -- Ensure config loaded
-if not getgenv().RiftAutoConfig then
+if not getgenv().bgsInfConfig then
     error("Failed to load config!")
 end
 
-local CONFIG = getgenv().RiftAutoConfig
+local CONFIG = getgenv().bgsInfConfig
 
 -- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RemoteEvent = ReplicatedStorage.Shared.Framework.Network.Remote.RemoteEvent
+local TeleportService = game:GetService("TeleportService")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local RemoteEvent = ReplicatedStorage.Shared.Framework.Network.Remote.RemoteEvent
 
--- Rift data
+-- Rift data with names and paths
 local RIFT_DATA = {
-    ["royal-chest"] = {path = "royal-chest", type = "chest"},
-    ["golden-chest"] = {path = "golden-chest", type = "chest"},
-    ["dice-rift"] = {path = "dice-rift", type = "chest"},
+    ["Royal Chest"] = {path = "royal-chest", type = "chest"},
+    ["Golden Chest"] = {path = "golden-chest", type = "chest"},
+    ["Dice Chest"] = {path = "dice-rift", type = "chest"},
     ["Rainbow Egg"] = {path = "rainbow-egg", type = "egg"},
     ["Void Egg"] = {path = "void-egg", type = "egg"},
     ["Nightmare Egg"] = {path = "nightmare-egg", type = "egg"},
@@ -32,14 +33,16 @@ local RIFT_DATA = {
 local function getRiftTimer(riftPath)
     local timerGui = Workspace.Rendered.Rifts[riftPath].Display.SurfaceGui.Timer
     local timerText = timerGui.Text
-    local minutes = tonumber(timerText:match("(%d+) minutes"))
-    return minutes or 0
+    local minutes = tonumber(timerText:match("(%d+) minutes")) or 0
+    return minutes
 end
 
 local function flyToRift(riftPath)
     local targetPart = Workspace.Rendered.Rifts[riftPath].Decoration.Model.islandbottom_collision.MeshPart
     local targetPos = targetPart.Position + Vector3.new(0, 5, 0) -- Slightly above platform
-    LocalPlayer.Character:MoveTo(targetPos)
+    if LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart then
+        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(targetPos)
+    end
 end
 
 local function openChest(chestType)
@@ -56,18 +59,19 @@ end
 
 local function serverHop()
     if CONFIG.SERVER_HOP then
-        game:GetService("TeleportService"):Teleport(game.PlaceId)
+        TeleportService:Teleport(game.PlaceId)
     end
 end
 
--- Main logic
 local function findTargetRift()
+    -- Prioritize eggs first based on EGG_HATCH config order
     for _, egg in ipairs(CONFIG.EGG_HATCH) do
         local riftInfo = RIFT_DATA[egg]
         if riftInfo and Workspace.Rendered.Rifts:FindFirstChild(riftInfo.path) then
             return riftInfo
         end
     end
+    -- Then check chests based on CHESTS_OPEN config order
     for _, chest in ipairs(CONFIG.CHESTS_OPEN) do
         local riftInfo = RIFT_DATA[chest]
         if riftInfo and Workspace.Rendered.Rifts:FindFirstChild(riftInfo.path) then
@@ -77,6 +81,7 @@ local function findTargetRift()
     return nil
 end
 
+-- Main logic
 local function mainLoop()
     while true do
         -- Auto-bubble
@@ -105,8 +110,17 @@ local function mainLoop()
 
             -- Check timer and rejoin
             if CONFIG.AUTO_REJOIN then
-                local timer = getRiftTimer(targetRift.path)
-                if timer <= 0 then
+                if Workspace.Rendered.Rifts:FindFirstChild(targetRift.path) then
+                    local timer = getRiftTimer(targetRift.path)
+                    if timer <= 0 then
+                        local nextRift = findTargetRift()
+                        if nextRift then
+                            flyToRift(nextRift.path)
+                        else
+                            serverHop()
+                        end
+                    end
+                else
                     local nextRift = findTargetRift()
                     if nextRift then
                         flyToRift(nextRift.path)
