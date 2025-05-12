@@ -1,15 +1,12 @@
--- Config directly in script
-getgenv().bgsInfConfig = {
-    AUTO_REJOIN = true, -- Rejoin servers when rifts despawn
-    SERVER_HOP = true, -- Enable server hopping
-    OPEN_CHEST = true, -- Auto-open chests
-    OPEN_EGG = true, -- Auto-hatch eggs
-    AUTO_BUBBLE = true, -- Auto-blow bubbles
-    CHESTS_OPEN = {"Royal Chest", "Dice Chest", "Golden Chest"}, -- Chests to open
-    EGG_HATCH = {"Cyber Egg", "Underworld Egg", "Rainbow Egg"}, -- Eggs to hatch (first in list prioritized)
-    EGG_HATCH_AMOUNT = 6, -- Number of eggs to hatch per action
-    LUCK_RIFT = {"X5", "X10", "X25"} -- Luck levels to target (e.g., only "X25" for highest luck)
-}
+-- Load config
+local CONFIG_URL = "https://raw.githubusercontent.com/Enzorbitant/Auto/main/config.lua"
+loadstring(game:HttpGet(CONFIG_URL))()
+
+-- Ensure config loaded
+if not getgenv().bgsInfConfig then
+    error("Failed to load config! Check the CONFIG_URL or config file.")
+end
+print("Config loaded successfully!")
 
 -- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -62,26 +59,33 @@ local function flyToRift(riftPath)
     if success and targetPart and LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart then
         local targetPos = targetPart.Position + Vector3.new(0, 5, 0) -- Slightly above platform
         LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(targetPos)
+        print("Flew to rift: " .. riftPath)
         return true
+    else
+        print("Failed to fly to rift: " .. riftPath .. " (Target part or character not found)")
+        return false
     end
-    return false
 end
 
 local function openChest(chestType)
     RemoteEvent:FireServer("UnlockRiftChest", chestType, false)
+    print("Attempted to open chest: " .. chestType)
 end
 
 local function hatchEgg(eggType, amount)
     RemoteEvent:FireServer("HatchEgg", eggType, amount)
+    print("Attempted to hatch " .. amount .. " " .. eggType)
 end
 
 local function blowBubble()
     RemoteEvent:FireServer("BlowBubble")
+    print("Blew bubble")
 end
 
 local function serverHop()
     if getgenv().bgsInfConfig.SERVER_HOP then
         TeleportService:Teleport(game.PlaceId)
+        print("Server hop initiated")
     end
 end
 
@@ -93,7 +97,11 @@ local function scanRifts()
         end)
         if success and exists then
             table.insert(activeRifts, {name = name, path = data.path, type = data.type})
+            print("Found active rift: " .. name .. " (" .. data.path .. ")")
         end
+    end
+    if #activeRifts == 0 then
+        print("No active rifts found!")
     end
     return activeRifts
 end
@@ -107,6 +115,7 @@ local function findTargetRift(activeRifts)
                 local luck = getRiftLuck(rift.path)
                 for _, luckLevel in ipairs(luckOptions) do
                     if luck == luckLevel then
+                        print("Target rift selected: " .. rift.name .. " with luck " .. luck)
                         return rift
                     end
                 end
@@ -120,17 +129,20 @@ local function findTargetRift(activeRifts)
                 local luck = getRiftLuck(rift.path)
                 for _, luckLevel in ipairs(luckOptions) do
                     if luck == luckLevel then
+                        print("Target rift selected: " .. rift.name .. " with luck " .. luck)
                         return rift
                     end
                 end
             end
         end
     end
+    print("No suitable target rift found with matching luck!")
     return nil
 end
 
 -- Main logic
 local function mainLoop()
+    print("Main loop started!")
     while true do
         -- Auto-bubble
         if getgenv().bgsInfConfig.AUTO_BUBBLE then
